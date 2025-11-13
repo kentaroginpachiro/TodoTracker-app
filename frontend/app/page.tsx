@@ -9,23 +9,26 @@ export default function Home() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState<any | null>(null);
 
+  // edit state dalam modal
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const [search, setSearch] = useState("");
 
   // pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
-  // ini dipakai utk fetch todos sekali saat komponen mount
   useEffect(() => {
     fetchTodos();
   }, []);
 
-  // helper kecil buat normalisasi nilai completed dari API
   const normalizeCompleted = (val: any) => {
     return val === true || val === "true" || val === 1 || val === "1";
   };
 
-  // panggil API dan simpan hasil ke state
   const fetchTodos = async () => {
     const data = await getTodos();
     const normalized = Array.isArray(data)
@@ -34,18 +37,15 @@ export default function Home() {
     setTodos(normalized);
   };
 
-  // tambah todo baru lewat API lalu refresh list
   const handleAdd = async () => {
-    if (!title) return;
-    await createTodos(title, description);
+    if (!title.trim()) return;
+    await createTodos(title.trim(), description.trim());
     setTitle("");
     setDescription("");
-    // setelah menambah, pindah ke halaman 1 supaya user melihat item baru
     setCurrentPage(1);
     fetchTodos();
   };
 
-  // hapus todo lalu refresh, jika modal buka untuk todo ini tutup modal
   const handleDelete = async (id: number) => {
     await deleteTodos(id);
     fetchTodos();
@@ -54,7 +54,6 @@ export default function Home() {
     }
   };
 
-  // toggle completed lewat API lalu refresh, update selectedTodo jika perlu
   const handleToggleComplete = async (id: number, completed: boolean) => {
     await updateTodos(id, { completed: !completed });
     fetchTodos();
@@ -63,19 +62,63 @@ export default function Home() {
     }
   };
 
-  // buka modal detail
   const openModal = (todo: any) => {
     setSelectedTodo(todo);
+    // reset editing state setiap buka modal
+    setIsEditing(false);
+    setEditTitle(todo.title ?? "");
+    setEditDescription(todo.description ?? "");
     setModalOpen(true);
   };
 
-  // tutup modal
   const handleCloseModal = () => {
     setModalOpen(false);
     setSelectedTodo(null);
+    setIsEditing(false);
+    setEditTitle("");
+    setEditDescription("");
   };
 
-  // format tanggal 
+  const startEdit = () => {
+    if (!selectedTodo) return;
+    setEditTitle(selectedTodo.title ?? "");
+    setEditDescription(selectedTodo.description ?? "");
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    if (!selectedTodo) return;
+    setIsEditing(false);
+    setEditTitle(selectedTodo.title ?? "");
+    setEditDescription(selectedTodo.description ?? "");
+  };
+
+  const saveEdit = async () => {
+    if (!selectedTodo) return;
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) return;
+    setSaving(true);
+    try {
+      await updateTodos(selectedTodo.id, {
+        title: trimmedTitle,
+        description: editDescription.trim(),
+      });
+      // refresh global list
+      await fetchTodos();
+      // update selected todo lokal agar modal langsung reflect
+      setSelectedTodo((prev: any) => ({
+        ...prev,
+        title: trimmedTitle,
+        description: editDescription.trim(),
+      }));
+      setIsEditing(false);
+    } catch (e) {
+      console.error("Failed to update todo", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatDate = (d?: string) => {
     if (!d) return "";
     const date = new Date(d);
@@ -83,17 +126,14 @@ export default function Home() {
     return date.toLocaleString();
   };
 
-  // filter todos berdasarkan title 
   const filteredTodos = useMemo(() => {
     const q = (search || "").trim().toLowerCase();
     if (!q) return Todos;
     return Todos.filter((t) => ((t.title || "") as string).toLowerCase().includes(q));
   }, [Todos, search]);
 
-  // total pages derived from filtered results and pageSize
   const totalPages = Math.max(1, Math.ceil(filteredTodos.length / pageSize));
 
-  // ensure currentPage is valid whenever filteredTodos or pageSize change
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
@@ -103,12 +143,10 @@ export default function Home() {
     }
   }, [filteredTodos, pageSize, totalPages, currentPage]);
 
-  // reset to first page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [search]);
 
-  // slice the filtered todos for current page
   const paginatedTodos = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTodos.slice(start, start + pageSize);
@@ -116,7 +154,7 @@ export default function Home() {
 
   const handleChangePageSize = (size: number) => {
     setPageSize(size);
-    setCurrentPage(1); // reset to first page on page size change
+    setCurrentPage(1);
   };
 
   const goToPage = (p: number) => {
@@ -124,7 +162,6 @@ export default function Home() {
     setCurrentPage(page);
   };
 
-  // helper to render a compact range of page buttons around current page
   const getPageNumbersToShow = () => {
     const maxButtons = 7;
     if (totalPages <= maxButtons) {
@@ -134,7 +171,6 @@ export default function Home() {
     let start = Math.max(1, currentPage - window);
     let end = Math.min(totalPages, currentPage + window);
 
-    // adjust if near boundaries
     if (start === 1) {
       end = Math.min(totalPages, start + maxButtons - 1);
     } else if (end === totalPages) {
@@ -147,7 +183,6 @@ export default function Home() {
   };
 
   return (
-    // UI utama
     <main className="min-h-screen bg-gray-100 flex flex-col items-center p-10">
       <h1 className="text-2xl font-bold mb-6">Todo Tracker</h1>
 
@@ -155,13 +190,13 @@ export default function Home() {
       <div className="w-full max-w-md mb-6 bg-white p-4 rounded shadow">
         <label className="block mb-2">
           <span className="text-sm font-medium">Title</span>
-          <input
-            type="text"
-            placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 block w-full border p-2 rounded"
-          />
+            <input
+              type="text"
+              placeholder="Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 block w-full border p-2 rounded"
+            />
         </label>
 
         <label className="block mb-3">
@@ -178,7 +213,8 @@ export default function Home() {
         <div className="flex justify-end">
           <button
             onClick={handleAdd}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            disabled={!title.trim()}
+            className={`px-4 py-2 rounded text-white ${title.trim() ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-400 cursor-not-allowed"}`}
           >
             Add
           </button>
@@ -269,60 +305,113 @@ export default function Home() {
       {filteredTodos.length > 0 && (
         <div className="w-full max-w-md flex flex-col items-center gap-2 mt-4">
           <div className="text-sm text-gray-600">
-            Showing {(filteredTodos.length === 0) ? 0 : ( (currentPage - 1) * pageSize + 1 )}
+            Showing {filteredTodos.length === 0 ? 0 : ( (currentPage - 1) * pageSize + 1 )}
             {" - "}
             {Math.min(currentPage * pageSize, filteredTodos.length)}
             {" of "}{filteredTodos.length}
           </div>
 
-          <nav className="flex items-center gap-2">
-            <button
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              className={`px-3 py-1 rounded ${currentPage === 1 ? "bg-gray-200 text-gray-400" : "bg-white border"}`}
-            >
-              Prev
-            </button>
-
-            {getPageNumbersToShow().map((p) => (
+            <nav className="flex items-center gap-2">
               <button
-                key={p}
-                onClick={() => goToPage(p)}
-                className={`px-3 py-1 rounded ${p === currentPage ? "bg-blue-500 text-white" : "bg-white border"}`}
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 rounded ${currentPage === 1 ? "bg-gray-200 text-gray-400" : "bg-white border"}`}
               >
-                {p}
+                Prev
               </button>
-            ))}
 
-            <button
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`px-3 py-1 rounded ${currentPage === totalPages ? "bg-gray-200 text-gray-400" : "bg-white border"}`}
-            >
-              Next
-            </button>
-          </nav>
+              {getPageNumbersToShow().map((p) => (
+                <button
+                  key={p}
+                  onClick={() => goToPage(p)}
+                  className={`px-3 py-1 rounded ${p === currentPage ? "bg-blue-500 text-white" : "bg-white border"}`}
+                >
+                  {p}
+                </button>
+              ))}
+
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded ${currentPage === totalPages ? "bg-gray-200 text-gray-400" : "bg-white border"}`}
+              >
+                Next
+              </button>
+            </nav>
         </div>
       )}
 
-      {/* Modal detail */}
+      {/* Modal detail + edit */}
       {modalOpen && selectedTodo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={handleCloseModal} />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={handleCloseModal}
+          />
           <div className="relative bg-white rounded shadow-lg max-w-lg w-full mx-4 z-10">
             <div className="flex justify-between items-start p-4 border-b">
-              <div>
-                <h3 className="text-lg font-semibold">{selectedTodo.title}</h3>
-                <p className="text-xs text-gray-500">Created: {formatDate(selectedTodo.createdAt ?? selectedTodo.created_at ?? selectedTodo.created ?? selectedTodo.date)}</p>
+              <div className="flex flex-col gap-1">
+                {!isEditing ? (
+                  <>
+                    <h3 className="text-lg font-semibold">{selectedTodo.title}</h3>
+                    <p className="text-xs text-gray-500">
+                      Created:{" "}
+                      {formatDate(
+                        selectedTodo.createdAt ??
+                          selectedTodo.created_at ??
+                          selectedTodo.created ??
+                          selectedTodo.date
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      className="border rounded p-2 text-sm"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="Title"
+                      disabled={saving}
+                    />
+                    <p className="text-xs text-gray-400">
+                      (Editing) Created:{" "}
+                      {formatDate(
+                        selectedTodo.createdAt ??
+                          selectedTodo.created_at ??
+                          selectedTodo.created ??
+                          selectedTodo.date
+                      )}
+                    </p>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => handleToggleComplete(selectedTodo.id, selectedTodo.completed)} className="text-green-600 hover:underline text-sm">
+                <button
+                  onClick={() =>
+                    handleToggleComplete(selectedTodo.id, selectedTodo.completed)
+                  }
+                  className="text-green-600 hover:underline text-sm"
+                  disabled={saving}
+                >
                   {selectedTodo.completed ? "Undo" : "Done"}
                 </button>
-                <button onClick={() => handleDelete(selectedTodo.id)} className="text-red-500 hover:underline text-sm">
+                <button
+                  onClick={() => handleDelete(selectedTodo.id)}
+                  className="text-red-500 hover:underline text-sm"
+                  disabled={saving}
+                >
                   Delete
                 </button>
-                <button onClick={handleCloseModal} className="text-gray-500 hover:text-gray-700 text-xl leading-none" aria-label="Close dialog">
+                <button
+                  onClick={handleCloseModal}
+                  className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+                  aria-label="Close dialog"
+                  disabled={saving}
+                >
                   ×
                 </button>
               </div>
@@ -330,20 +419,82 @@ export default function Home() {
 
             <div className="p-4">
               <h4 className="text-sm font-medium text-gray-700">Description</h4>
-              <p className="mt-2 text-gray-600">{selectedTodo.description}</p>
+              {!isEditing ? (
+                <p className="mt-2 text-gray-600 whitespace-pre-wrap">
+                  {selectedTodo.description || "(No description)"}
+                </p>
+              ) : (
+                <textarea
+                  className="mt-2 w-full border rounded p-2 text-sm resize-vertical"
+                  rows={5}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Description"
+                  disabled={saving}
+                />
+              )}
 
               <div className="mt-4">
                 <h4 className="text-sm font-medium text-gray-700">Details</h4>
                 <ul className="text-sm text-gray-600 mt-2 space-y-1">
-                  <li>Status: <span className="font-medium">{selectedTodo.completed ? "Completed" : "Open"}</span></li>
-                  <li>Created: {formatDate(selectedTodo.createdAt ?? selectedTodo.created_at ?? selectedTodo.created ?? selectedTodo.date)}</li>
+                  <li>
+                    Status:{" "}
+                    <span className="font-medium">
+                      {selectedTodo.completed ? "Completed" : "Open"}
+                    </span>
+                  </li>
+                  <li>
+                    Created:{" "}
+                    {formatDate(
+                      selectedTodo.createdAt ??
+                        selectedTodo.created_at ??
+                        selectedTodo.created ??
+                        selectedTodo.date
+                    )}
+                  </li>
                   {selectedTodo.id && <li>ID: {selectedTodo.id}</li>}
                 </ul>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 p-4 border-t">
-              <button onClick={handleCloseModal} className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">Close</button>
+              {!isEditing ? (
+                <>
+                  <button
+                    onClick={startEdit}
+                    className="px-4 py-2 rounded bg-yellow-100 hover:bg-yellow-200 text-sm"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={cancelEdit}
+                    disabled={saving}
+                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving || !editTitle.trim()}
+                    className={`px-4 py-2 rounded text-sm ${
+                      saving || !editTitle.trim()
+                        ? "bg-blue-300 cursor-not-allowed text-white"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
