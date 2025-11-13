@@ -2,17 +2,17 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
- "scripts": {
-  "dev": "node index.js",
-  "migrate": "npx sequelize-cli db:migrate"
-}
-,
+  "scripts": {
+    "dev": "node index.js",
+    "migrate": "npx sequelize-cli db:migrate"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-validator": "^7.3.0",
     "sequelize": "^6.37.7",

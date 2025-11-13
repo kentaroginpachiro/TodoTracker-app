@@ -4,11 +4,11 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 if (!API_URL) {
-  throw new Error(
-    "Missing NEXT_PUBLIC_API_URL environment variable. Add NEXT_PUBLIC_API_URL to .env (or .env.local) and restart the dev server."
-  );
+  throw new Error("No env detected");
 }
 
+
+console.log("Frontend API_URL:", API_URL);
 
 
 //get
