@@ -1,7 +1,6 @@
 // index.js
 // library import
 
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { body, validationResult } = require('express-validator');
@@ -10,7 +9,7 @@ const { Op } = require('sequelize');
 
 // initialize
 const app = express();
-const PORT = parseInt(process.env.PORT, 10) 
+const PORT = 2002
 
 // mdwr
 app.use(cors());
